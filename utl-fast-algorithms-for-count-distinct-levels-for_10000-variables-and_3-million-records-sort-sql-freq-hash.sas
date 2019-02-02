@@ -1,4 +1,4 @@
-Fast algorithms for distinct levels for_10000 variables and_3 million records sort sql freq hash                                   
+Fast algorithms for count distinct levels for_10000 variables and_3 million records sort sql freq hash                                   
                                                                                                                                    
   Distinct counts for 10,000 variables and 3 million reccords can be done in under 25 minutes with                                 
   90 cores, 250gb of ram and average available system utilization of about 20%.                                                    
