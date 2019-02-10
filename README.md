@@ -1,11 +1,25 @@
 # utl-fast-algorithms-for-count-distinct-levels-for_10000-variables-and_3-million-records-sort-sql-freq-hash
     Fast algorithms for distinct levels for_10000 variables and_3 million records sort sql freq hash
 
-    UPDATE
-    See Pauls impressive recent faster HASH solutions on the end of this post
-    Paul Dorfman
-    sashole@bellsouth.net
+    UPDATES Paul Dorfman Paul-1 and Paul-2 on end of this message
 
+       PAUL 1 -- Fast simple single HASH small memory solutions
+       PAUL 2 -- Know your data and cadinality efects
+                 Limited-range [0:1000] Solution (small footprint)
+                 Array based Hashing and Accommodating any integer key range
+
+       See Pauls impressive recent faster HASH solutions on the end of this post
+       Paul Dorfman
+       sashole@bellsouth.net
+
+       Hope to do some serious benchmarking when I get back ti home base and the 'Beast' computer.
+
+      I have no association with SAS, Amazon or Paul/Don enterprise. However I find their book to be
+      a great reference on HASH algorithms. I use it as a reference, you don't need to read the
+      entire text to find it useful.
+
+      see
+      https://www.oreilly.com/library/view/data-management-solutions/9781635260595/
 
       Distinct counts for 10,000 variables and 3 million reccords can be done in under 25 minutes with
       90 cores, 250gb of ram and average available system utilization of about 20%.
@@ -255,7 +269,6 @@
     systask kill sys1 sys2 sys3 sys4 sys5 sys6 sys7 sys8;
 
     /* task 8 of 8 patial log
-
     247   +    data num999;
                 if _n_ = 1 then do;
                   dcl hash
@@ -270,12 +283,10 @@
                *rc=h.delete();
                stop;
                run;
-
     NOTE: There were 3000000 observations read from the data set D8.D8.
     NOTE: The data set WORK.NUM999 has 1 observations and 1 variables.
     NOTE: DATA statement used (Total process time):
           real time           0.67 seconds
-
     249   +    data num1000;
                 if _n_ = 1 then do;
                   dcl hash
@@ -290,7 +301,6 @@
                *rc=h.delete();
                stop;
                run;
-
     NOTE: There were 3000000 observations read from the data set D8.D8.
     NOTE: The data set WORK.NUM1000 has 1 observations and 1 variables.
     NOTE: DATA statement used (Total process time):
@@ -487,24 +497,19 @@
     count(distinct num123) as num123, count(distinct num124) as num124, count(distinct num125) as
     num125 from d1.d1 ;
     NOTE: Table SD1.SQL1 created, with 1 rows and 125 columns.
-
     MPRINT(SQLUNQ):  quit;
     NOTE: PROCEDURE SQL used (Total process time):
           real time           1:21.55
     */
 
 
-    *____             _
-    |  _ \ __ _ _   _| |
-    | |_) / _` | | | | |
-    |  __/ (_| | |_| | |
-    |_|   \__,_|\__,_|_|
+    *____             _   _
+    |  _ \ __ _ _   _| | / |
+    | |_) / _` | | | | | | |
+    |  __/ (_| | |_| | | | |
+    |_|   \__,_|\__,_|_| |_|
 
     ;
-
-    See Pauls impressive faster HASH solutions on the end of this post
-    Paul Dorfman
-    sashole@bellsouth.net
 
 
     Very impressive indeed!
@@ -564,7 +569,6 @@
     under 310 Mb. I'm not showing it here but from my experience, it will run about
     20 percent slower than the key-indexed scheme above but with the sizable benefit
     of accommodating any integer key range.
-
     If the key is anything else - except for a simple character key shorter than $8
     (which can be turned into an integer using the PIBw. informat without losing precision) -
     there is essentially no choice but the hash object, most likely in the form you've shown
@@ -601,5 +605,169 @@
     run ;
 
 
-                                                                                             
-                                                                                                                              
+    *____             _   ____
+    |  _ \ __ _ _   _| | |___ \
+    | |_) / _` | | | | |   __) |
+    |  __/ (_| | |_| | |  / __/
+    |_|   \__,_|\__,_|_| |_____|
+
+    ;
+    Your word "minimal" has made me think of whether using the hash of hashes approach
+    is really "minimal"; and I realized that it is "minimal" only in the sense that,
+    once I started thinking in this direction, it appeared to be the simplest, and so
+    what ended up being "minimal" was merely my tunnel vision thinking. At times,
+    following one's stream-of-the-consciousness isn't a bad thing,
+    and it often works - but rarely results in "minimal" coding or "maximal"
+    performance. After posting, I had been having a nagging suspicion that by
+    doing exactly that, I overcomplicated the thing, and the words of Roark said
+    to Keating "Simpler, Peter, simpler ..." kept ringing in my ears.
+
+    And, lo and behold, of course there's a much simpler way to solve the problem -
+    by using a *single* hash object instance. How? Well, simple:
+
+    %let W =  1000 ; * variables ;
+    %let H = 30000 ; * records ;
+    %let R =  1000 ; * key range = max N of unique values ;
+
+    data have ;
+      call streaminit (7) ;
+      array nn num1-num&w ;
+      do _n_ = 1 to &h ;
+        do over nn ;
+          nn = 1e6 + rand ("integer", &r) ;
+        end ;
+        output ;
+      end ;
+    run ;
+
+    data _null_ ;
+      dcl hash h (ordered:"A") ;
+      h.definekey  ("nvar", "_n_") ;
+      h.definedata ("nvar") ;
+      h.definedone () ;
+      do until (end) ;
+        set have end = end ;
+        array nn (Nvar) num: ;
+        do over nn ;
+          h.ref (key:nvar, key:nn, data:nvar) ;
+        end ;
+      end ;
+      h.output (dataset: "hash") ;
+    run ;
+
+    data want_one_hash ;
+      do Count = 1 by 1 until (last.Nvar) ;
+        set hash ;
+        by Nvar ;
+      end ;
+    run ;
+
+    Note that the final counting can be done using an iterator in the first step.
+    However, it's much simpler to have the hash to spit out data set HASH and do the
+    counting in a separate step (which in this case takes but 0.05 sec, anyway).
+    And it is simpler because the hash object, unfortunately, is not (hopefully
+    just yet) endowed with the first.x/last.x functionality, so counting usi
+    ng the iterator would involve a good deal of fairly distasteful control-break
+    logic a la COBOL. Now compare it to the code based on hash of hashes:
+
+    data want_hoh (keep = nvar count) ;
+      set have end = end ;
+      array nn num: ;
+      if _n_ = 1 then do ;
+        dcl hash hh () ;
+        hh.definekey ("_i_") ;
+        hh.definedata ("h") ;
+        hh.definedone () ;
+        do over nn ;
+          dcl hash h () ;
+          h.definekey ("_n_") ;
+          h.definedone () ;
+          hh.add() ;
+        end ;
+      end ;
+      do over nn ;
+        hh.find() ;
+        h.ref (key:nn, data:nn) ;
+      end ;
+      if end then do over nn ;
+        Nvar = put (vname (nn), $8.) ;
+        hh.find() ;
+        Count = h.num_items ;
+        output ;
+      end ;
+    run ;
+
+    Interestingly, the "simple" single-hash code runs against HAVE as concocted
+    above (on my laptop) in 20 secs vs 28 secs for HOH, though I'd expected the
+    disparity to be quite a bit larger. But it should become more pronounced as W
+    grows and scanning through more hash instances gets more onerous.
+    The RAM footprints at W=1000 are also comparable (90 Mb for the single hash and 110 Mb f
+    or HOH).
+
+    Now note that while concocting the data, I added 1e6 to NN on purpose - to wit,
+    to make it out of reach for key-indexing (it would overflow the memory) and have
+    a chance to show that closed table array-based hashing with the simplest
+    collision resolution policy (i.e. linear probing), which (unlike key-indexing)
+    has no problem with any integer key range, stacks up against using the
+    hash object in both guises. (Granted, in the form shown below it is applicable
+    only to a simple integer key, while the hash object solutions can be used with
+    a character or composite key as well.)
+
+    * Load factor L defines hash table sparsity vs number of unique keys in it ;
+    * With L=0.5 about half of hash cells will remain unoccupied ;
+    * Step below finds the first prime number > U/L to size up hash array ;
+    * Same number is then used as modulo divisor in hash function mod(nn,&s) ;
+
+    %let L = 0.5 ;
+    data _null_ ;
+      do p = ceil (&U / &L) by 1 until (j = up + 1) ;
+        up = ceil (sqrt(p)) ;
+        do j = 2 to up until (not mod(p,j)) ;
+        end ;
+      end ;
+      call symputx ("S", p) ;
+    run ;
+
+    data want_hash_arr (keep = Nvar Count) ;
+      array h [&w, &s] _temporary_ ;
+      array q [&w, &s] _temporary_ ;
+      set have end = end ;
+      array nn num: ;
+      do over nn ;
+        do _n_ = 1 + mod (nn, &s) by 1 until (_h = nn or _h = .) ;
+          if _n_ > &s then _n_ = 1 ;
+          _h = h[_i_,_n_] ;
+        end ;
+        if _h ne . then continue ;
+        h[_i_,_n_] = nn ;
+        q[_i_,_n_] =  1 ;
+      end ;
+      if end ;
+      call missing (of nn[*]) ;
+      do over nn ;
+        do _n_ = 1 to hbound (q, 2) ;
+          nn ++ N (q[_i_,_n_]) ;
+        end ;
+        Nvar = put (vname (nn), $8.) ;
+        Count = nn ;
+        output ;
+      end ;
+    run ;
+
+    Now, feel the difference: This guy runs in mere 3.5 seconds flat (5-6 times
+    the speed of either incarnation of the hash object code) and takes up 30 Mb
+    (1/3 the memory), even with the very sparse (and thus large) hash array table.
+
+    Of course, key-indexing still would run much faster - if the key range were
+    short enough for it to be usable (which I intentionally negated by adding
+    1e6 to the key). But it should be no surprise: The speed of this scheme
+    (identical for key-indexing and hash array) is defined by the tightness
+    of its inner loop - the first DO OVER NN - and the hash array code is much more involved t
+    han merely sticking 1 into the key-indexed cell whose number is NN.
+
+    Best regards
+    Paul Dofman
+
+
+
+                                                             
